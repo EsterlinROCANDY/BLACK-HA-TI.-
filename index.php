@@ -1,56 +1,69 @@
 <?php
-// Configuration principale du site
+// Configuration principale
 $site_title = "BLACK HAÏTI";
 $domain = "https://black-ha-ti-p0rk.onrender.com";
 $whatsapp_number = "44218865"; // Votre numéro WhatsApp
 
-// Paramètres de connexion à la base de données
+// Connexion à la base de données
 $db_host = "localhost"; // Adresse du serveur
 $db_user = "root"; // Utilisateur de la base
 $db_password = ""; // Mot de passe de la base
 $db_name = "black_haiti"; // Nom de la base
 
-// Connexion à la base de données
 $conn = new mysqli($db_host, $db_user, $db_password, $db_name);
 if ($conn->connect_error) {
     die("Erreur de connexion : " . $conn->connect_error);
 }
 
-// Fonction pour traiter une transaction
-function processTransaction($phoneNumber, $amount, $type, $whatsapp_number) {
-    global $conn;
+// Liste des produits disponibles
+$products = [
+    "Recharge Mobile" => [
+        ["label" => "Recharge Digicel - 100 HTG", "price" => 100, "type" => "topup"],
+        ["label" => "Recharge Digicel - 500 HTG", "price" => 500, "type" => "topup"],
+        ["label" => "Recharge Natcom - 100 HTG", "price" => 100, "type" => "topup"],
+        ["label" => "Recharge Natcom - 500 HTG", "price" => 500, "type" => "topup"]
+    ],
+    "Cartes Cadeaux" => [
+        ["label" => "Carte Google Play - 10 USD", "price" => 10, "type" => "giftcard"],
+        ["label" => "Carte Amazon - 20 USD", "price" => 20, "type" => "giftcard"],
+        ["label" => "Carte Netflix - 1 mois", "price" => 15, "type" => "giftcard"]
+    ]
+];
 
-    // Validation des entrées
-    if (!is_numeric($phoneNumber) || strlen($phoneNumber) < 8 || $amount <= 0) {
-        return "Erreur : Données invalides. Veuillez vérifier le numéro et le montant.";
-    }
-
-    // Générer les détails de la transaction
+// Fonction pour enregistrer une transaction
+function saveTransaction($conn, $product) {
     $transaction_id = uniqid("txn_");
+    $label = $product['label'];
+    $price = $product['price'];
+    $type = $product['type'];
     $status = "en attente";
 
-    // Enregistrement de la transaction
-    $stmt = $conn->prepare("INSERT INTO transactions (phone_number, amount, type, transaction_id, status) VALUES (?, ?, ?, ?, ?)");
-    $stmt->bind_param("sdsss", $phoneNumber, $amount, $type, $transaction_id, $status);
-
-    if ($stmt->execute()) {
-        // Préparer le lien WhatsApp
-        $message = urlencode("Bonjour, je souhaite effectuer une transaction.\n\nDétails :\n- Numéro : $phoneNumber\n- Montant : $amount Gourdes\n- Service : $type\n- ID Transaction : $transaction_id");
-        $whatsapp_link = "https://wa.me/509$whatsapp_number?text=$message";
-        return $whatsapp_link;
-    } else {
-        return "Erreur lors de l'enregistrement : " . $stmt->error;
-    }
+    $stmt = $conn->prepare("INSERT INTO transactions (transaction_id, label, price, type, status) VALUES (?, ?, ?, ?, ?)");
+    $stmt->bind_param("ssdss", $transaction_id, $label, $price, $type, $status);
+    $stmt->execute();
+    return $transaction_id;
 }
 
-// Traitement du formulaire
+// Fonction pour générer un lien WhatsApp
+function generateWhatsAppLink($product, $transaction_id, $whatsapp_number) {
+    $message = urlencode("Bonjour, je souhaite acheter :\n- Produit : " . $product['label'] . "\n- Prix : " . $product['price'] . " HTG/USD\n- ID Transaction : $transaction_id");
+    return "https://wa.me/509$whatsapp_number?text=$message";
+}
+
+// Traitement du formulaire d'achat
 $whatsapp_link = "";
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $phoneNumber = $_POST['phone_number'];
-    $amount = $_POST['amount'];
-    $type = $_POST['type'];
-
-    $whatsapp_link = processTransaction($phoneNumber, $amount, $type, $whatsapp_number);
+    $product_key = $_POST['product_key'];
+    foreach ($products as $category => $items) {
+        foreach ($items as $key => $product) {
+            if ($product_key == "$category-$key") {
+                // Enregistrer la transaction et générer le lien WhatsApp
+                $transaction_id = saveTransaction($conn, $product);
+                $whatsapp_link = generateWhatsAppLink($product, $transaction_id, $whatsapp_number);
+                break 2;
+            }
+        }
+    }
 }
 ?>
 
@@ -78,77 +91,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             font-size: 24px;
         }
         .container {
-            max-width: 600px;
+            max-width: 800px;
             margin: 30px auto;
             padding: 20px;
             background: #1e1e1e;
             border-radius: 10px;
             box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.5);
         }
-        .container form input,
-        .container form select,
-        .container form button {
-            width: 100%;
-            padding: 10px;
-            margin: 10px 0;
+        .product {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #222;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .product h3 {
+            margin: 0;
+        }
+        .product p {
+            margin: 5px 0 0;
+        }
+        .buy-form {
+            display: inline-block;
+        }
+        .buy-form button {
+            padding: 10px 15px;
+            background-color: #25D366;
+            color: #fff;
             border: none;
             border-radius: 5px;
-        }
-        .container form button {
-            background-color: #e91e63;
-            color: #fff;
             cursor: pointer;
         }
-        .container form button:hover {
-            background-color: #d81b60;
+        .buy-form button:hover {
+            background-color: #1da851;
         }
         .message {
             margin-top: 20px;
-            padding: 10px;
-            background-color: #222;
-            border-left: 4px solid #e91e63;
-        }
-        .whatsapp-link {
-            display: inline-block;
-            margin-top: 20px;
-            padding: 10px 20px;
-            background-color: #25D366;
+            padding: 15px;
+            background: #25D366;
             color: #fff;
-            text-decoration: none;
             border-radius: 5px;
-            font-weight: bold;
-        }
-        .whatsapp-link:hover {
-            background-color: #1da851;
         }
     </style>
 </head>
 <body>
     <header>
         <h1><?php echo $site_title; ?></h1>
-        <p>Rechargez vos mobiles et achetez des cartes cadeaux facilement</p>
+        <p>Rechargez vos mobiles et achetez des cartes cadeaux en toute simplicité.</p>
     </header>
     <div class="container">
-        <form method="POST" action="">
-            <label for="phone_number">Numéro de téléphone :</label>
-            <input type="text" id="phone_number" name="phone_number" placeholder="Exemple : 50912345678" required>
-
-            <label for="amount">Montant (en gourdes) :</label>
-            <input type="number" id="amount" name="amount" placeholder="Exemple : 100" required>
-
-            <label for="type">Type de service :</label>
-            <select id="type" name="type">
-                <option value="topup">Recharge Mobile</option>
-                <option value="giftcard">Carte Cadeau</option>
-            </select>
-
-            <button type="submit">Effectuer la Transaction</button>
-        </form>
-        <?php 
-        if (!empty($whatsapp_link)) { 
-            echo "<a class='whatsapp-link' href='$whatsapp_link' target='_blank'>Payer via WhatsApp</a>"; 
-        } 
-        ?>
+        <?php foreach ($products as $category => $items): ?>
+            <h2><?php echo $category; ?></h2>
+            <?php foreach ($items as $key => $product): ?>
+                <div class="product">
+                    <div>
+                        <h3><?php echo $product['label']; ?></h3>
+                        <p>Prix : <?php echo $product['price']; ?> HTG/USD</p>
+                    </div>
+                    <form class="buy-form" method="POST" action="">
+                        <input type="hidden" name="product_key" value="<?php echo "$category-$key"; ?>">
+                        <button type="submit">Acheter</button>
+                    </form>
+                </div>
+            <?php endforeach; ?>
+        <?php endforeach; ?>
+        <?php if ($whatsapp_link): ?>
+            <div class="message">
+                <p>Votre commande a été enregistrée ! Cliquez sur le lien ci-dessous pour finaliser le paiement via WhatsApp :</p>
+                <a href="<?php echo $whatsapp_link; ?>" target="_blank">Payer via WhatsApp</a>
+            </div>
+        <?php endif; ?>
     </div>
 </body>
 </html>
