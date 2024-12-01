@@ -45,7 +45,8 @@ function saveTransaction($conn, $product) {
 
     $stmt = $conn->prepare("INSERT INTO transactions (transaction_id, label, price, type, status) VALUES (?, ?, ?, ?, ?)");
     if (!$stmt) {
-        die("Erreur de préparation de la requête : " . $conn->error);
+        error_log("Erreur de préparation de la requête : " . $conn->error);
+        die("Une erreur est survenue. Veuillez réessayer plus tard.");
     }
 
     $stmt->bind_param("ssdss", $transaction_id, $label, $price, $type, $status);
@@ -63,19 +64,28 @@ function generateWhatsAppLink($product, $transaction_id, $whatsapp_number) {
 
 // Traitement du formulaire d'achat
 $whatsapp_link = "";
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['product_key'])) {
     $product_key = $_POST['product_key'];
+    $found = false;
+
     foreach ($products as $category => $items) {
         foreach ($items as $key => $product) {
-            if ($product_key == "$category-$key") {
-                // Enregistrer la transaction et générer le lien WhatsApp
+            if ($product_key === "$category-$key") {
                 $transaction_id = saveTransaction($conn, $product);
                 $whatsapp_link = generateWhatsAppLink($product, $transaction_id, $whatsapp_number);
+                $found = true;
                 break 2;
             }
         }
     }
+
+    if (!$found) {
+        echo "<p>Produit non trouvé. Veuillez réessayer.</p>";
+    }
 }
+
+// Fermeture de la connexion
+$conn->close();
 ?>
 
 <!DOCTYPE html>
@@ -85,7 +95,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo htmlspecialchars($site_title); ?></title>
     <style>
-        /* Styles simplifiés pour une meilleure lisibilité */
         body {
             font-family: Arial, sans-serif;
             background-color: #121212;
@@ -97,10 +106,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             background-color: #000;
             padding: 20px;
             text-align: center;
-        }
-        header h1 {
-            margin: 0;
-            font-size: 24px;
         }
         .container {
             max-width: 800px;
